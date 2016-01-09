@@ -26,9 +26,9 @@ object Main extends App {
   object Position {
     implicit val positionFormat = jsonFormat2(Position.apply)
   }
-  case class GameEvent(s: List[Position])
+  case class GameEvent(playerName: String, positions: List[Position])
   object GameEvent {
-    implicit val gameEventFormat = jsonFormat1(GameEvent.apply)
+    implicit val gameEventFormat = jsonFormat2(GameEvent.apply)
   }
   case class PlayerJoined(actor: ActorRef)
 
