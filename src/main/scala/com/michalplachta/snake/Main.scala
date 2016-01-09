@@ -6,29 +6,42 @@ import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import akka.stream.{ActorMaterializer, OverflowStrategy}
+import akka.stream.{ActorMaterializerSettings, Supervision, ActorMaterializer, OverflowStrategy}
+import spray.json._
+import spray.json.DefaultJsonProtocol._
 
 object Main extends App {
+  val decider: Supervision.Decider = ex => ex match {
+    case _: Throwable => {
+      ex.printStackTrace()
+      Supervision.Resume
+    }
+  }
+
   implicit val system = ActorSystem("snake")
-  implicit val materializer = ActorMaterializer()
+  val materializerSettings = ActorMaterializerSettings(system).withSupervisionStrategy(decider)
+  implicit val materializer = ActorMaterializer(materializerSettings)
 
   case class GameEvent(s: String)
+  object GameEvent {
+    implicit val gameEventFormat = jsonFormat1(GameEvent.apply)
+  }
   case class PlayerJoined(actor: ActorRef)
-  case class PlayerLeft(name: String)
 
   val actor =
     system.actorOf(Props(new Actor {
       var subscribers = Set.empty[ActorRef]
 
       def receive: Receive = {
-        case GameEvent(s) =>
-          println("Received " + s)
-          subscribers.foreach(_ ! s)
+        case g: GameEvent =>
+          println("Received " + g)
+          subscribers.foreach(_ ! g)
         case PlayerJoined(actor) =>
           println("Joined " + actor)
           context.watch(actor)
           subscribers += actor
         case Terminated(actor) =>
+          // TODO: check if this is enough (remember the supervision strategy settings)
           println("Terminated " + actor)
           subscribers = subscribers.filterNot(_ == actor)
         case msg =>
@@ -38,13 +51,13 @@ object Main extends App {
 
   val sink = Sink.actorRef(actor, "finished")
 
-  val broadcastFlow: Flow[String, String, _] = {
-    val in = Flow[String]
-      .map(GameEvent)
-      .to(sink)
+  val broadcastFlow: Flow[GameEvent, GameEvent, _] = {
+    val in =
+      Flow[GameEvent]
+        .to(sink)
 
     val out =
-      Source.actorRef[String](1, OverflowStrategy.fail)
+      Source.actorRef[GameEvent](1, OverflowStrategy.dropHead)
         .mapMaterializedValue(actor ! PlayerJoined(_))
 
     Flow.fromSinkAndSource(in, out)
@@ -52,15 +65,14 @@ object Main extends App {
 
   val flow: Flow[Message, Message, _] = {
     Flow[Message]
+      .via(debug)
       .collect {
         case msg: TextMessage.Strict => msg.text
       }
+      .map(_.parseJson.convertTo[GameEvent])
       .via(broadcastFlow)
-      .map {
-        case msg: String =>
-          TextMessage.Strict(msg)
-      }
-      .via(debug)
+      .map(_.toJson.toString)
+      .map(TextMessage.Strict)
   }
 
   val route: Route =
