@@ -22,7 +22,11 @@ object Main extends App {
   val materializerSettings = ActorMaterializerSettings(system).withSupervisionStrategy(decider)
   implicit val materializer = ActorMaterializer(materializerSettings)
 
-  case class GameEvent(s: String)
+  case class Position(x: Int, y: Int)
+  object Position {
+    implicit val positionFormat = jsonFormat2(Position.apply)
+  }
+  case class GameEvent(s: List[Position])
   object GameEvent {
     implicit val gameEventFormat = jsonFormat1(GameEvent.apply)
   }
