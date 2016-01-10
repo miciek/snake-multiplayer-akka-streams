@@ -6,9 +6,11 @@ class Broadcaster extends Actor {
   var subscribers = Set.empty[ActorRef]
 
   def receive: Receive = {
-    case g: GameEvent =>
-      println("Received " + g)
-      subscribers.foreach(_ ! g)
+    case msg: GameEvent =>
+      println("Received " + msg)
+      subscribers.foreach(_ ! msg)
+    case msg: FruitPosition =>
+      println("Received " + msg)
     case PlayerJoined(actor) =>
       println("Joined " + actor)
       context.watch(actor)
