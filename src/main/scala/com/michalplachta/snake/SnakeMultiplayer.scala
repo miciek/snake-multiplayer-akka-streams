@@ -13,40 +13,53 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class SnakeMultiplayer(implicit system: ActorSystem) {
-  val fruitFlow: Flow[List[PlayerPosition], CurrentFruitPosition, _] = {
+  val fruitFlow: Flow[List[PlayerPosition], FruitPosition, _] = {
     val fruitMaker = system.actorOf(Props[FruitMaker])
     implicit val timeout = Timeout(5 seconds)
 
     def fruit(playerPositions: List[PlayerPosition]): Future[FruitPosition] =
       fruitMaker.ask(WhereShouldTheFruitBe(playerPositions)).mapTo[FruitPosition]
 
-    Flow[List[PlayerPosition]].mapAsync(2)(fruit).collect {
-        case pos: CurrentFruitPosition =>
-          pos
-        case pos: NewFruitPosition =>
-          CurrentFruitPosition.fromNew(pos)
-      }
+    Flow[List[PlayerPosition]].mapAsync(2)(fruit)
+  }
+
+  val scoreFlow: Flow[Int, Int, _] = {
+    Flow[Int]
+      .buffer(1, OverflowStrategy.backpressure) // TODO: scan and broadcast don't seem to be working well together, that's why the buffer is here
+      .scan(0)(_ + _)
   }
 
   val gameLogicFlow: Flow[PlayerState, GameEvent, _] =
     Flow.fromGraph(GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._
 
-      val broadcast = b.add(Broadcast[PlayerState](2))
-      val fruit = b.add(fruitFlow)
-      val zip = b.add(Zip[CurrentFruitPosition, PlayerState])
-      val flow = b.add(Flow[(CurrentFruitPosition, PlayerState)].map {
-        case (fruitPosition, playerState) => {
-          GameEvent(playerState.playerName, playerState.positions, fruitPosition)
+      val fruitLogic = b.add(fruitFlow)
+      val scoreLogic = b.add(scoreFlow)
+      val fruitToPoint = b.add(Flow[FruitPosition].map {
+        case _: NewFruitPosition => 1
+        case _: CurrentFruitPosition => 0
+      })
+      val gameEvent = b.add(Flow[((FruitPosition, Int), PlayerState)].map {
+        case ((fruitPosition, score), playerState) => {
+          GameEvent(playerState.playerName, playerState.positions, CurrentFruitPosition(fruitPosition.x, fruitPosition.y), score)
         }
       })
 
-      broadcast.out(0).map(_.positions) ~> fruit ~> zip.in0
-      broadcast.out(1) ~> zip.in1
+      val broadcastPlayerState = b.add(Broadcast[PlayerState](2))
+      val broadcastFruit = b.add(Broadcast[FruitPosition](2))
+      val zipFruitAndScore = b.add(Zip[FruitPosition, Int])
+      val zip = b.add(Zip[(FruitPosition, Int), PlayerState])
 
-      zip.out ~> flow
+      broadcastPlayerState.out(0).map(_.positions) ~> fruitLogic ~> broadcastFruit.in
+      broadcastPlayerState.out(1) ~> zip.in1
 
-      FlowShape(broadcast.in, flow.out)
+      broadcastFruit.out(0) ~> zipFruitAndScore.in0
+      broadcastFruit.out(1) ~> fruitToPoint ~> scoreLogic ~> zipFruitAndScore.in1
+
+      zipFruitAndScore.out ~> zip.in0
+      zip.out ~> gameEvent
+
+      FlowShape(broadcastPlayerState.in, gameEvent.out)
     })
 
   val gameEventBroadcastFlow: Flow[GameEvent, GameEvent, _] = {

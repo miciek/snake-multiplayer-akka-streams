@@ -3,6 +3,7 @@ package com.michalplachta.snake
 import akka.actor.ActorRef
 import spray.json.DefaultJsonProtocol._
 
+// TODO: Review types...
 sealed trait Position {
   val x: Int
   val y: Int
@@ -34,10 +35,10 @@ object PlayerState {
   implicit val jsonFormat = jsonFormat2(PlayerState.apply)
 }
 
-case class GameEvent(playerName: String, positions: List[PlayerPosition], fruitPosition: CurrentFruitPosition)
+case class GameEvent(playerName: String, positions: List[PlayerPosition], fruitPosition: CurrentFruitPosition, score: Int)
 
 object GameEvent {
-  implicit val jsonFormat = jsonFormat3(GameEvent.apply)
+  implicit val jsonFormat = jsonFormat4(GameEvent.apply)
 }
 
 case class PlayerJoined(actor: ActorRef)
