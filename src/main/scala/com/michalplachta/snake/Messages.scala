@@ -28,10 +28,16 @@ object PlayerPosition {
   implicit val jsonFormat = jsonFormat2(PlayerPosition.apply)
 }
 
-case class GameEvent(playerName: String, positions: List[PlayerPosition])
+case class PlayerState(playerName: String, positions: List[PlayerPosition])
+
+object PlayerState {
+  implicit val jsonFormat = jsonFormat2(PlayerState.apply)
+}
+
+case class GameEvent(playerName: String, positions: List[PlayerPosition], fruitPosition: CurrentFruitPosition)
 
 object GameEvent {
-  implicit val jsonFormat = jsonFormat2(GameEvent.apply)
+  implicit val jsonFormat = jsonFormat3(GameEvent.apply)
 }
 
 case class PlayerJoined(actor: ActorRef)

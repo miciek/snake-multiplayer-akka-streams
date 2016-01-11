@@ -11,6 +11,7 @@ class Broadcaster extends Actor {
       subscribers.foreach(_ ! msg)
     case msg: FruitPosition =>
       println("Received " + msg)
+      subscribers.foreach(_ ! msg)
     case PlayerJoined(actor) =>
       println("Joined " + actor)
       context.watch(actor)

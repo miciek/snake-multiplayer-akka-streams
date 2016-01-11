@@ -13,33 +13,46 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class SnakeMultiplayer(implicit system: ActorSystem) {
-  val broadcastActor = system.actorOf(Props[Broadcaster])
-  val broadcastSink = Sink.actorRef(broadcastActor, "finished")
-
-  val fruitFlow: Flow[List[PlayerPosition], FruitPosition, _] = {
+  val fruitFlow: Flow[List[PlayerPosition], CurrentFruitPosition, _] = {
     val fruitMaker = system.actorOf(Props[FruitMaker])
     implicit val timeout = Timeout(5 seconds)
 
     def fruit(playerPositions: List[PlayerPosition]): Future[FruitPosition] =
       fruitMaker.ask(WhereShouldTheFruitBe(playerPositions)).mapTo[FruitPosition]
 
-    Flow[List[PlayerPosition]].mapAsync(2)(fruit)
+    Flow[List[PlayerPosition]].mapAsync(2)(fruit).collect {
+        case pos: CurrentFruitPosition =>
+          pos
+        case pos: NewFruitPosition =>
+          CurrentFruitPosition.fromNew(pos)
+      }
   }
 
-  val gameLogicFlow: Flow[GameEvent, GameEvent, _] =
+  val gameLogicFlow: Flow[PlayerState, GameEvent, _] =
     Flow.fromGraph(GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._
 
-      val broadcast = b.add(Broadcast[GameEvent](2))
+      val broadcast = b.add(Broadcast[PlayerState](2))
       val fruit = b.add(fruitFlow)
-      val sink = b.add(broadcastSink)
+      val zip = b.add(Zip[CurrentFruitPosition, PlayerState])
+      val flow = b.add(Flow[(CurrentFruitPosition, PlayerState)].map {
+        case (fruitPosition, playerState) => {
+          GameEvent(playerState.playerName, playerState.positions, fruitPosition)
+        }
+      })
 
-      broadcast.out(1).map(_.positions) ~> fruit ~> sink
+      broadcast.out(0).map(_.positions) ~> fruit ~> zip.in0
+      broadcast.out(1) ~> zip.in1
 
-      FlowShape(broadcast.in, broadcast.out(0))
+      zip.out ~> flow
+
+      FlowShape(broadcast.in, flow.out)
     })
 
   val gameEventBroadcastFlow: Flow[GameEvent, GameEvent, _] = {
+    val broadcastActor = system.actorOf(Props[Broadcaster])
+    val broadcastSink = Sink.actorRef(broadcastActor, "finished")
+
     val in =
       Flow[GameEvent]
         .to(broadcastSink)
@@ -57,7 +70,7 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
       .collect {
         case msg: TextMessage.Strict => msg.text
       }
-      .map(_.parseJson.convertTo[GameEvent])
+      .map(_.parseJson.convertTo[PlayerState])
       .via(gameLogicFlow)
       .via(gameEventBroadcastFlow)
       .map(_.toJson.toString)
