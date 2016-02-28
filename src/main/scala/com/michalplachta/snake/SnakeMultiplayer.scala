@@ -3,8 +3,8 @@ package com.michalplachta.snake
 import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.pattern.ask
+import akka.stream._
 import akka.stream.scaladsl._
-import akka.stream.{FlowShape, OverflowStrategy}
 import akka.util.Timeout
 import com.michalplachta.snake.FruitMaker.WhereShouldTheFruitBe
 import spray.json._

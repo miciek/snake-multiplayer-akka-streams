@@ -6,8 +6,8 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 
-import scala.util.{Failure, Success}
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
 
 object Main extends App {
   implicit val system = ActorSystem()
@@ -18,7 +18,7 @@ object Main extends App {
   val route: Route =
     path("snakeSocket") {
       get {
-        handleWebsocketMessages(snakeMultiplayer.flow)
+        handleWebSocketMessages(snakeMultiplayer.flow)
       }
     }
 
