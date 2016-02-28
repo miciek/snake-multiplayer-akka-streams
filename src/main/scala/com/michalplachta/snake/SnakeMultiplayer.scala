@@ -1,6 +1,7 @@
 package com.michalplachta.snake
 
 import akka.actor.{ActorSystem, Props}
+import akka.event.Logging
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.pattern.ask
 import akka.stream._
@@ -14,7 +15,7 @@ import scala.concurrent.duration._
 
 class SnakeMultiplayer(implicit system: ActorSystem) {
   val fruitFlow: Flow[List[PlayerPosition], FruitPosition, _] = {
-    val fruitMaker = system.actorOf(Props[FruitMaker])
+    val fruitMaker = system.actorOf(Props[FruitMaker], "fruitMaker")
     implicit val timeout = Timeout(5 seconds)
 
     def fruit(playerPositions: List[PlayerPosition]): Future[FruitPosition] =
@@ -63,7 +64,7 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
     })
 
   val gameEventBroadcastFlow: Flow[GameEvent, GameEvent, _] = {
-    val broadcastActor = system.actorOf(Props[Broadcaster])
+    val broadcastActor = system.actorOf(Props[Broadcaster], "broadcaster")
     val broadcastSink = Sink.actorRef(broadcastActor, "finished")
 
     val in =
@@ -79,7 +80,7 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
 
   val flow: Flow[Message, Message, _] = {
     Flow[Message]
-      .via(debug)
+      .log("incoming")(Logging(system, "MessageLogger"))
       .collect {
         case msg: TextMessage.Strict => msg.text
       }
@@ -89,10 +90,4 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
       .map(_.toJson.toString)
       .map(TextMessage.Strict)
   }
-
-  private def debug[T]: Flow[T, T, _] =
-    Flow[T].map { in =>
-      println("element: " + in)
-      in
-    }
 }

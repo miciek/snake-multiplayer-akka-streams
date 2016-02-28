@@ -1,26 +1,29 @@
 package com.michalplachta.snake
 
-import akka.actor.{Actor, ActorRef, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
 
-class Broadcaster extends Actor {
-  var subscribers = Set.empty[ActorRef]
+class Broadcaster extends Actor with ActorLogging {
+  var players = Set.empty[ActorRef]
+
+  private def broadcast(msg: Any): Unit = {
+    log.debug("Broadcasting {} to {} players", msg, players.size)
+    players.foreach(_ ! msg)
+  }
 
   def receive: Receive = {
-    case msg: GameEvent =>
-      println("Received " + msg)
-      subscribers.foreach(_ ! msg)
-    case msg: FruitPosition =>
-      println("Received " + msg)
-      subscribers.foreach(_ ! msg)
-    case PlayerJoined(actor) =>
-      println("Joined " + actor)
-      context.watch(actor)
-      subscribers += actor
-    case Terminated(actor) =>
+    case event: GameEvent =>
+      broadcast(event)
+    case fruitPos: FruitPosition =>
+      broadcast(fruitPos)
+    case PlayerJoined(player) =>
+      log.debug("New player joined: {}", player)
+      context.watch(player)
+      players += player
+    case Terminated(player) =>
       // TODO: check if this is enough (remember the supervision strategy settings)
-      println("Terminated " + actor)
-      subscribers = subscribers.filterNot(_ == actor)
+      log.debug("Player actor terminated {}", player)
+      players = players.filterNot(_ == player)
     case msg =>
-      println("UNKNOWN: " + msg)
+      log.error("UNKNOWN message received: {}", msg)
   }
 }

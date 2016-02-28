@@ -1,6 +1,7 @@
 package com.michalplachta.snake
 
 import akka.actor._
+import akka.event.slf4j.SLF4JLogging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
@@ -9,7 +10,7 @@ import akka.stream.{ActorMaterializer, ActorMaterializerSettings, Supervision}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
 
-object Main extends App {
+object Main extends App with SLF4JLogging {
   implicit val system = ActorSystem()
   implicit val materializer = customMaterializer()
 
@@ -31,9 +32,9 @@ object Main extends App {
   serverBinding.onComplete {
     case Success(binding) =>
       val localAddress = binding.localAddress
-      println(s"Server is listening on ${localAddress.getHostName}:${localAddress.getPort}")
+      log.info(s"Server is listening on ${localAddress.getHostName}:${localAddress.getPort}")
     case Failure(e) =>
-      println(s"Binding failed with ${e.getMessage}")
+      log.error(s"Binding failed with ${e.getMessage}")
       system.terminate()
   }
 
