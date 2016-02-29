@@ -14,15 +14,20 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class SnakeMultiplayer(implicit system: ActorSystem) {
-  val fruitFlow: Flow[List[PlayerPosition], FruitPosition, _] = {
-    val fruitMaker = system.actorOf(Props[FruitMaker], "fruitMaker")
-    implicit val timeout = Timeout(5 seconds)
+  implicit val timeout = Timeout(5 seconds)
+  val fruitMaker = system.actorOf(Props[FruitMaker], "fruitMaker")
 
-    def fruit(playerPositions: List[PlayerPosition]): Future[FruitPosition] =
-      fruitMaker.ask(WhereShouldTheFruitBe(playerPositions)).mapTo[FruitPosition]
+  /**
+    * Returns new fruit if players positions collide with the current one.
+    * Returns unchanged current one otherwise.
+    */
+  def fruitPosition(playerPositions: List[PlayerPosition]): Future[FruitPosition] =
+    fruitMaker
+      .ask(WhereShouldTheFruitBe(playerPositions))
+      .mapTo[FruitPosition]
 
-    Flow[List[PlayerPosition]].mapAsync(2)(fruit)
-  }
+  val fruitFlow: Flow[List[PlayerPosition], FruitPosition, _] =
+                 Flow[List[PlayerPosition]].mapAsync(2)(fruitPosition)
 
   val scoreFlow: Flow[Int, Int, _] = {
     Flow[Int]
