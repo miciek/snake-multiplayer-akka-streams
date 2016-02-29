@@ -29,22 +29,45 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
   val fruitFlow: Flow[List[PlayerPosition], FruitPosition, _] =
                  Flow[List[PlayerPosition]].mapAsync(2)(fruitPosition)
 
-  val scoreFlow: Flow[Int, Int, _] = {
-    Flow[Int]
-      .buffer(1, OverflowStrategy.backpressure) // TODO: scan and broadcast don't seem to be working well together, that's why the buffer is here
+  val scoreFlow: Flow[FruitPosition, Int, _] = {
+    Flow[FruitPosition]
+      .map {
+        case _: NewFruitPosition => 1
+        case _: CurrentFruitPosition => 0
+      }
+      .buffer(1, OverflowStrategy.backpressure) // scan will always be ahead by one initial element
       .scan(0)(_ + _)
   }
 
+  /**
+    *               +----------------+              +---------------+     +-------------------+
+    *               |                |              |               |     |                   |
+    *               |                +------------->+  Fruit Flow   +---->+  Broadcast Fruit  |
+    * +------------>+   Broadcast    |              |               |     |     Position      |
+    *               |   PlayerState  |              +---------------+     +---+----------+----+
+    *               |                |                                        |          |
+    *               |                +-------------+                          |          |
+    *               +----------------+             |                          v          |
+    *                                              |                      +---+--------+ |
+    *                                              |                      |            | |
+    *                                              |                      | Score Flow | |
+    *                                              |                      |            | |
+    *                                              |                      +---+--------+ |
+    *                      +------------------+    |                          |          |
+    *                      |                  +<---+                          |          |
+    *                      |                  |                               v          v
+    *                      |    Game Event    |                           +---+----------+---+
+    * <--------------------+        Zip       |                           |                  |
+    *                      |                  +<--------------------------+  Fruit/Score Zip |
+    *                      |                  |                           |                  |
+    *                      +------------------+                           +------------------+
+    */
   val gameLogicFlow: Flow[PlayerState, GameEvent, _] =
     Flow.fromGraph(GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._
 
       val fruitLogic = b.add(fruitFlow)
       val scoreLogic = b.add(scoreFlow)
-      val fruitToPoint = b.add(Flow[FruitPosition].map {
-        case _: NewFruitPosition => 1
-        case _: CurrentFruitPosition => 0
-      })
       val gameEvent = b.add(Flow[((FruitPosition, Int), PlayerState)].map {
         case ((fruitPosition, score), playerState) => {
           GameEvent(playerState.playerName, playerState.positions, CurrentFruitPosition(fruitPosition.x, fruitPosition.y), score)
@@ -60,7 +83,7 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
       broadcastPlayerState.out(1) ~> zip.in1
 
       broadcastFruit.out(0) ~> zipFruitAndScore.in0
-      broadcastFruit.out(1) ~> fruitToPoint ~> scoreLogic ~> zipFruitAndScore.in1
+      broadcastFruit.out(1) ~> scoreLogic ~> zipFruitAndScore.in1
 
       zipFruitAndScore.out ~> zip.in0
       zip.out ~> gameEvent
