@@ -72,7 +72,10 @@ class SnakeMultiplayer(implicit system: ActorSystem) {
       val scoreLogic = b.add(scoreFlow)
       val broadcastPlayerState = b.add(Broadcast[PlayerState](2))
       val broadcastFruit = b.add(Broadcast[FruitPosition](2))
-      val gameEventZip = b.add(ZipWith[PlayerState, Int, FruitPosition, GameEvent](GameEvent.apply))
+      val gameEventZip = b.add(ZipWith[PlayerState,
+                                       Int,
+                                       FruitPosition,
+                                       GameEvent](GameEvent.apply))
 
       broadcastPlayerState.out(0) ~> fruitLogic ~> broadcastFruit.in
       broadcastPlayerState.out(1) ~> gameEventZip.in0
