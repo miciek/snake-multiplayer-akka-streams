@@ -39,6 +39,9 @@ case class GameEvent(playerName: String, positions: List[PlayerPosition], fruitP
 
 object GameEvent {
   implicit val jsonFormat = jsonFormat4(GameEvent.apply)
+
+  def apply(playerState: PlayerState, score: Int, fruitPosition: FruitPosition) : GameEvent =
+    GameEvent(playerState.playerName, playerState.positions, CurrentFruitPosition(fruitPosition.x, fruitPosition.y), score)
 }
 
 case class PlayerJoined(actor: ActorRef)
