@@ -7,7 +7,7 @@ version := "1.0"
 scalaVersion := "2.11.7"
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.2"
+  val akkaVersion = "2.4.4"
   val logbackVersion = "1.1.5"
   val scalaTestVersion = "2.2.5"
   val junitVersion = "4.10"
