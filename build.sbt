@@ -4,13 +4,13 @@ organization := "miciek"
 
 version := "1.0"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.4"
-  val logbackVersion = "1.1.5"
-  val scalaTestVersion = "2.2.5"
-  val junitVersion = "4.10"
+  val akkaVersion = "2.4.8"
+  val logbackVersion = "1.1.7"
+  val scalaTestVersion = "2.2.6"
+  val junitVersion = "4.12"
   Seq(
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
