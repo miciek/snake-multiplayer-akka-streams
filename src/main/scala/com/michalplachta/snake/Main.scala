@@ -33,17 +33,17 @@ object Main extends App with SLF4JLogging {
     case Success(binding) =>
       val localAddress = binding.localAddress
       log.info(s"Server is listening on ${localAddress.getHostName}:${localAddress.getPort}")
+
     case Failure(e) =>
       log.error(s"Binding failed with ${e.getMessage}")
       system.terminate()
   }
 
   def customMaterializer(): ActorMaterializer = {
-    val decider: Supervision.Decider = ex => ex match {
-      case _: Throwable => {
+    val decider: Supervision.Decider = {
+      case ex: Throwable =>
         ex.printStackTrace()
         Supervision.Resume
-      }
     }
 
     val materializerSettings = ActorMaterializerSettings(system).withSupervisionStrategy(decider)
